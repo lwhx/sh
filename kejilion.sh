@@ -13,7 +13,7 @@ gl_kjlan='\033[96m'
 
 
 canshu="default"
-permission_granted="false"
+permission_granted="true"
 ENABLE_STATS="true"
 
 
@@ -9712,6 +9712,11 @@ moltbot_menu() {
 			dnf update -y
 			dnf group install -y "Development Tools" "Development Libraries"
 			dnf install -y cmake
+		fi
+
+		if command -v apt &>/dev/null; then
+			apt update -y
+			apt install build-essential python3 -y
 		fi
 
 		install node npm

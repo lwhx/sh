@@ -1,5 +1,5 @@
 #!/bin/bash
-sh_v="4.3.10"
+sh_v="4.4.0"
 
 
 gl_hui='\e[37m'
@@ -13,7 +13,7 @@ gl_kjlan='\033[96m'
 
 
 canshu="default"
-permission_granted="false"
+permission_granted="true"
 ENABLE_STATS="true"
 
 
@@ -619,7 +619,7 @@ while true; do
 	echo ""
 	echo "鏡像操作"
 	echo "------------------------"
-	echo "1. 获取指定镜像             3. 删除指定镜像"
+	echo "1. 取得指定鏡像 3. 刪除指定鏡像"
 	echo "2. 更新指定鏡像 4. 刪除所有鏡像"
 	echo "------------------------"
 	echo "0. 返回上一級選單"
@@ -635,7 +635,7 @@ while true; do
 			done
 			;;
 		2)
-			send_stats "更新镜像"
+			send_stats "更新鏡像"
 			read -e -p "請輸入鏡像名稱（多個鏡像名稱請以空格分隔）:" imagenames
 			for name in $imagenames; do
 				echo -e "${gl_kjlan}正在更新鏡像:$name${gl_bai}"
@@ -3299,7 +3299,6 @@ send_stats "安裝nginx環境"
 root_use
 clear
 echo -e "${gl_huang}nginx未安裝，開始安裝nginx環境...${gl_bai}"
-check_disk_space 1 /home
 install_dependency
 install_docker
 install_certbot
@@ -3811,7 +3810,7 @@ ldnmp_web_status() {
 			2)
 				send_stats "克隆站點域名"
 				read -e -p "請輸入舊網域名稱:" oddyuming
-				read -e -p "請輸入新網域名稱:" yuming
+				read -e -p "請輸入新網域:" yuming
 				install_certbot
 				install_ssltls
 				certs_status
@@ -3852,7 +3851,7 @@ ldnmp_web_status() {
 				send_stats "建立關聯站點"
 				echo -e "為現有的站點再關聯一個新網域用於訪問"
 				read -e -p "請輸入現有的網域名稱:" oddyuming
-				read -e -p "請輸入新網域名稱:" yuming
+				read -e -p "請輸入新網域:" yuming
 				install_certbot
 				install_ssltls
 				certs_status
@@ -5036,7 +5035,7 @@ fetch_github_ssh_keys() {
 
 sshkey_panel() {
   root_use
-  send_stats "用户密钥登录"
+  send_stats "使用者密鑰登入"
   while true; do
 	  clear
 	  local REAL_STATUS=$(grep -i "^PubkeyAuthentication" /etc/ssh/sshd_config | tr '[:upper:]' '[:lower:]')
@@ -6696,7 +6695,7 @@ mount_partition() {
 		return 1
 	fi
 
-	echo "分區已成功掛載到$MOUNT_POINT"
+	echo "分割區已成功掛載到$MOUNT_POINT"
 
 	# 檢查 /etc/fstab 是否已經存在 UUID 或掛載點
 	if grep -qE "UUID=$UUID|[[:space:]]$MOUNT_POINT[[:space:]]" /etc/fstab; then
@@ -9644,6 +9643,7 @@ moltbot_menu() {
 		fi
 	}
 
+
 	get_install_status() {
 		if command -v openclaw >/dev/null 2>&1; then
 			echo "${gl_lv}已安裝${gl_bai}"
@@ -9653,12 +9653,13 @@ moltbot_menu() {
 	}
 
 	get_running_status() {
-		if pgrep -f "openclaw gateway" >/dev/null 2>&1; then
+		if pgrep -f "openclaw-gatewa" >/dev/null 2>&1; then
 			echo "${gl_lv}運作中${gl_bai}"
 		else
 			echo "${gl_hui}未運行${gl_bai}"
 		fi
 	}
+
 
 	show_menu() {
 
@@ -9677,7 +9678,7 @@ moltbot_menu() {
 		echo "2. 啟動"
 		echo "3. 停止"
 		echo "--------------------"
-		echo "4. 日誌查看"
+		echo "4. 狀態日誌查看"
 		echo "5. 換模型"
 		echo "6. 加新模型API"
 		echo "7. TG輸入連接碼"
@@ -9697,16 +9698,11 @@ moltbot_menu() {
 	}
 
 
-	start_tmux() {
-		install tmux
+	start_gateway() {
 		openclaw gateway stop
-		tmux kill-session -t gateway > /dev/null 2>&1
-		tmux new -d -s gateway "openclaw gateway"
-		check_crontab_installed
-		crontab -l 2>/dev/null | grep -q "s gateway" || (crontab -l 2>/dev/null; echo "* * * * * tmux has-session -t gateway 2>/dev/null || tmux new -d -s gateway 'openclaw gateway'") | crontab -
+		openclaw gateway start
 		sleep 3
 	}
-
 
 	install_moltbot() {
 		echo "開始安裝 OpenClaw..."
@@ -9714,17 +9710,23 @@ moltbot_menu() {
 
 		if command -v dnf &>/dev/null; then
 			dnf update -y
-			dnf groupinstall -y "Development Tools"
+			dnf group install -y "Development Tools" "Development Libraries"
 			dnf install -y cmake
 		fi
 
+		if command -v apt &>/dev/null; then
+			apt update -y
+			apt install build-essential python3 -y
+		fi
+
+		install node npm
 		country=$(curl -s ipinfo.io/country)
 		if [[ "$country" == "CN" || "$country" == "HK" ]]; then
-			pnpm config set registry https://registry.npmmirror.com
 			npm config set registry https://registry.npmmirror.com
 		fi
-		curl -fsSL https://openclaw.ai/install.sh | bash
-		start_tmux
+		npm install -g openclaw@latest
+		openclaw onboard --install-daemon
+		start_gateway
 		add_app_id
 		break_end
 
@@ -9734,21 +9736,23 @@ moltbot_menu() {
 	start_bot() {
 		echo "啟動 OpenClaw..."
 		send_stats "啟動 OpenClaw..."
-		start_tmux
+		start_gateway
 		break_end
 	}
 
 	stop_bot() {
 		echo "停止 OpenClaw..."
 		send_stats "停止 OpenClaw..."
-		openclaw gateway stop
 		tmux kill-session -t gateway > /dev/null 2>&1
+		openclaw gateway stop
 		break_end
 	}
 
 	view_logs() {
-		echo "查看 OpenClaw 日誌，Ctrl+C 退出"
+		echo "查看 OpenClaw 狀態日誌"
 		send_stats "查看 OpenClaw 日誌"
+		openclaw status
+		openclaw gateway status
 		openclaw logs
 		break_end
 	}
@@ -9946,7 +9950,7 @@ EOF
 		echo "Provider    : $provider_name"
 		echo "Base URL    : $base_url"
 		echo "API Key     : ${api_key:0:8}****"
-		echo "默认模型    : $default_model"
+		echo "預設模型 :$default_model"
 		echo "模型總數 :$model_count"
 		echo "======================"
 
@@ -9963,7 +9967,7 @@ EOF
 			echo
 			echo "🔄 設定預設模型並重新啟動網關..."
 			openclaw models set "$provider_name/$default_model"
-			start_tmux
+			start_gateway
 			echo "✅ 完成！所有$model_count個模型已載入"
 		fi
 
@@ -10078,7 +10082,7 @@ EOF
 				openclaw plugins enable "$plugin_name"
 			fi
 
-			start_tmux
+			start_gateway
 			break_end
 		done
 	}
@@ -10126,7 +10130,7 @@ EOF
 			echo "🔍 正在檢查插件狀態..."
 
 			# 2. 檢查是否已經在 list 中且為 disabled (最常見的情況)
-			if echo "$plugin_list" | grep -qW "$plugin_id" && echo "$plugin_list" | grep "$plugin_id" | grep -q "disabled"; then
+			if echo "$plugin_list" | grep -qw "$plugin_id" && echo "$plugin_list" | grep "$plugin_id" | grep -q "disabled"; then
 				echo "💡 插件 [$plugin_id] 已預先安裝，正在啟動..."
 				openclaw plugins enable "$plugin_id" && echo "✅ 啟動成功" || echo "❌ 啟動失敗"
 
@@ -10154,7 +10158,7 @@ EOF
 						openclaw plugins enable "$plugin_id"
 					else
 						echo "❌ 嚴重錯誤：無法取得該外掛程式。請檢查 ID 是否正確或網路是否可用。"
-						# 關鍵：這裡直接 return 或 continue，不走下面的 start_tmux，防止寫死配置
+						# 關鍵：這裡直接 return 或 continue，不走下面的 start_gateway，防止寫死配置
 						break_end
 						continue
 					fi
@@ -10162,7 +10166,7 @@ EOF
 			fi
 
 			echo "🔄 正在重啟 OpenClaw 服務以載入新插件..."
-			start_tmux
+			start_gateway
 			break_end
 		done
 	}
@@ -10226,7 +10230,7 @@ EOF
 			if [ $? -eq 0 ]; then
 				echo "✅ 技能$skill_name安裝成功。"
 				# 執行重啟/啟動服務邏輯
-				start_tmux
+				start_gateway
 			else
 				echo "❌ 安裝失敗。請檢查技能名稱是否正確，或參考文件排查。"
 			fi
@@ -10262,9 +10266,8 @@ EOF
 	update_moltbot() {
 		echo "更新 OpenClaw..."
 		send_stats "更新 OpenClaw..."
-		curl -fsSL https://openclaw.ai/install.sh | bash
-		openclaw gateway stop
-		start_tmux
+		npm install -g openclaw@latest
+		start_gateway
 		add_app_id
 		echo "更新完成"
 		break_end
@@ -10287,7 +10290,7 @@ EOF
 		send_stats "編輯 OpenClaw 設定檔"
 		install nano
 		nano ~/.openclaw/openclaw.json
-		start_tmux
+		start_gateway
 	}
 
 
@@ -10545,7 +10548,7 @@ while true; do
 	  echo -e "${gl_kjlan}97.  ${color97}WireGuard組網(服務端)${gl_kjlan}98.  ${color98}WireGuard組網(客戶端)"
 	  echo -e "${gl_kjlan}99.  ${color99}DSM群暉虛擬機${gl_kjlan}100. ${color100}Syncthing點對點檔案同步工具"
 	  echo -e "${gl_kjlan}-------------------------"
-	  echo -e "${gl_kjlan}101. ${color101}AI影片生成工具${gl_kjlan}102. ${color102}VoceChat多人線上聊天系統"
+	  echo -e "${gl_kjlan}101. ${color101}AI影片產生工具${gl_kjlan}102. ${color102}VoceChat多人線上聊天系統"
 	  echo -e "${gl_kjlan}103. ${color103}Umami網站統計工具${gl_kjlan}104. ${color104}Stream四層代理轉送工具"
 	  echo -e "${gl_kjlan}105. ${color105}思源筆記${gl_kjlan}106. ${color106}Drawnix開源白板工具"
 	  echo -e "${gl_kjlan}107. ${color107}PanSou網盤搜尋${gl_kjlan}108. ${color108}LangBot聊天機器人"
@@ -13810,7 +13813,7 @@ while true; do
 
 	  101|moneyprinterturbo)
 		local app_id="101"
-		local app_name="AI影片生成工具"
+		local app_name="AI影片產生工具"
 		local app_text="MoneyPrinterTurbo是一款使用AI大模型合成高清短影片的工具"
 		local app_url="官方網站:${gh_https_url}github.com/harry0703/MoneyPrinterTurbo"
 		local docker_name="moneyprinterturbo"
@@ -14640,7 +14643,7 @@ net_menu() {
 		echo "1. 啟用網卡"
 		echo "2. 停用網路卡"
 		echo "3. 查看網卡詳細信息"
-		echo "4. 刷新网卡信息"
+		echo "4. 刷新網卡資訊"
 		echo "0. 返回上一級選單"
 		echo "===================================="
 		read -erp "請選擇操作:" choice
@@ -15181,7 +15184,7 @@ EOF
 						send_stats "SSH連接埠已修改"
 						new_ssh_port $new_port
 					elif [[ $new_port -eq 0 ]]; then
-						send_stats "退出SSH埠修改"
+						send_stats "退出SSH連接埠修改"
 						break
 					else
 						echo "連接埠號碼無效，請輸入1到65535之間的數字。"
@@ -15413,7 +15416,7 @@ EOF
 			done
 
 			echo ""
-			echo "随机姓名"
+			echo "隨機姓名"
 			echo "------------------------"
 			local first_names=("John" "Jane" "Michael" "Emily" "David" "Sophia" "William" "Olivia" "James" "Emma" "Ava" "Liam" "Mia" "Noah" "Isabella")
 			local last_names=("Smith" "Johnson" "Brown" "Davis" "Wilson" "Miller" "Jones" "Garcia" "Martinez" "Williams" "Lee" "Gonzalez" "Rodriguez" "Hernandez")
@@ -15674,7 +15677,7 @@ EOF
 						  ;;
 					  3)
 						  crontab -e
-						  send_stats "编辑定时任务"
+						  send_stats "編輯定時任務"
 						  ;;
 					  *)
 						  break  # 跳出循环，退出菜单
@@ -16801,8 +16804,8 @@ echo "docker容器管理 k docker ps |k docker 容器"
 echo "docker映像管理 k docker img |k docker 映像"
 echo "LDNMP站台管理 k web"
 echo "LDNMP快取清理 k web cache"
-echo "安装WordPress       k wp |k wordpress |k wp xxx.com"
-echo "安装反向代理        k fd |k rp |k 反代 |k fd xxx.com"
+echo "安裝WordPress k wp |k wordpress |k wp xxx.com"
+echo "安裝反向代理 k fd |k rp |k 反代 |k fd xxx.com"
 echo "安裝負載平衡 k loadbalance |k 負載平衡"
 echo "安裝L4負載平衡 k stream |k L4負載平衡"
 echo "防火牆面板 k fhq |k 防火牆"
